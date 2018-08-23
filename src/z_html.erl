@@ -516,7 +516,7 @@ sanitize_opts(Html, Options) ->
         proplists:get_value(attr_extra, Options, []), Options).
 
 sanitize1(Html, ExtraElts, ExtraAttrs, Options) ->
-    Parsed = mochiweb_html:parse(ensure_escaped_amp(Html)),
+    Parsed = z_html_parse:parse(ensure_escaped_amp(Html)),
     Sanitized = sanitize(Parsed, ExtraElts, ExtraAttrs, Options),
     flatten(Sanitized).
 
@@ -529,11 +529,16 @@ sanitize(ParseTree, ExtraElts, ExtraAttrs, Options) when is_binary(ExtraAttrs) -
 sanitize(ParseTree, ExtraElts, ExtraAttrs, Options) ->
     sanitize(ParseTree, [], ExtraElts, ExtraAttrs, Options).
 
+sanitize({<<"li">>, _, _} = Elt, [], ExtraElts, ExtraAttrs, Options) ->
+    sanitize({<<"ul">>, [], [ Elt ]}, [], ExtraElts, ExtraAttrs, Options);
+sanitize({<<"li">>, _, _} = Elt, [ParentElt | _ ] = Stack, ExtraElts, ExtraAttrs, Options)
+    when ParentElt =/= <<"ul">>, ParentElt =/= <<"ol">> ->
+    sanitize({<<"ul">>, [], [ Elt ]}, Stack, ExtraElts, ExtraAttrs, Options);
 sanitize(B, Stack, _ExtraElts, _ExtraAttrs, Options) when is_binary(B) ->
     case sanitize_element({'TextNode', B}, Stack, Options) of
         {'TextNode', B1} -> escape(iolist_to_binary(B1));
         Other -> Other
-    end; 
+    end;
 sanitize({comment, _Text} = Comment, Stack, _ExtraElts, _ExtraAttrs, Options) ->
     sanitize_element(Comment, Stack, Options);
 sanitize({pi, _Raw}, _Stack, _ExtraElts, _ExtraAttrs, _Options) ->
@@ -888,7 +893,7 @@ nl2br_bin(<<$\n, Post/binary>>, Acc) ->
     nl2br_bin(Post, <<Acc/binary, "<br />">>);
 nl2br_bin(<<C, Post/binary>>, Acc) ->
     nl2br_bin(Post, <<Acc/binary, C>>).
-        
+
 
 %% @doc Given a HTML list, scrape all `<link>' elements and return their attributes. Attribute names are lowercased.
 %% @spec scrape_link_elements(string()) -> [LinkAttributes]
@@ -897,7 +902,7 @@ scrape_link_elements(Html) ->
         {match, Elements} ->
             F = fun(El) ->
                         H = iolist_to_binary(["<p>", El, "</p>"]),
-                        {<<"p">>, [], [{_, Attrs, []}]} = mochiweb_html:parse(H),
+                        {<<"p">>, [], [{_, Attrs, []}]} = z_html_parse:parse(H),
                         [{z_string:to_lower(K),V} || {K,V} <- lists:flatten(Attrs)]
                 end,
             [F(El) || [El] <- Elements];
